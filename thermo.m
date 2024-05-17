@@ -28,6 +28,7 @@ classdef    thermo < handle
     % models and literature values, suitable for engineering and scientific applications.
     %
     % Created by: Miguel Rolinho Clemente, May 2024
+    % v.0.2.0
 
     properties      % Species information
         species;    % Identifier of current species (mix of name, formula, or more common identifier)
@@ -104,9 +105,12 @@ classdef    thermo < handle
             switch th.model
                 case 'ideal-gas'
                     p = inputParser;
-                    addParameter(p, 'T', NaN);
-                    addParameter(p, 'P', NaN);
-                    addParameter(p, 'v', NaN);
+                    errorMsg = 'Inputed values must be positive, scalar, and numeric.';
+                    validationFcn = @(x) assert(isnumeric(x) && isscalar(x) ...
+                        && (x > 0),errorMsg);
+                    addParameter(p, 'T', NaN, validationFcn);
+                    addParameter(p, 'P', NaN, validationFcn);
+                    addParameter(p, 'v', NaN, validationFcn);
                     parse(p, varargin{:});
 
                     th.T = p.Results.T;
@@ -115,18 +119,23 @@ classdef    thermo < handle
 
                     % Ensure sufficient parameters are provided to define state
                     provided = ~isnan([th.T, th.P, th.v]);
-                    paramsProvided = sum(provided);
-                    if paramsProvided < 2
-                        error('Insufficient inputs: Please provide at least two variables among T, P, v.');
-                    end
+                    % paramsProvided = sum(provided);
+                    % if paramsProvided < 2
+                    %     error('Insufficient inputs: Please provide at least two variables among T, P, v.');
+                    % end
 
                     % Calculate properties based on ideal gas law
-                    if provided(1) && provided(2) % T and P provided
+                    if provided(1) % T provided
+                        if provided(2) % P provided
                         th.v = th.R*th.T/th.P;
-                    elseif provided(1) && provided(3) % T and v provided
-                        th.P = th.R*th.T/th.v;
+                        elseif provided(3) % v provided
+                            th.P = th.R*th.T/th.v;
+                        else % enough to get values from table using T
+                        end
                     elseif provided(2) && provided(3) % P and v provided
                         th.T = th.P*th.v/th.R;
+                    else % not enough inputs
+                        error('Insufficient inputs: Please either provide Temperature or both Pressure and Specific Volume.');
                     end
 
                     % Load temperature-dependent properties
@@ -145,59 +154,52 @@ classdef    thermo < handle
                     addParameter(p, 'P', NaN);
                     addParameter(p, 'x', NaN);
                     addParameter(p, 'u', NaN);
+                    addParameter(p, 'v', NaN);
+                    addParameter(p, 'h', NaN);
+                    addParameter(p, 's', NaN);
                     parse(p, varargin{:});
 
                     th.T = p.Results.T;
                     th.P = p.Results.P;
                     th.x = p.Results.x;
                     th.u = p.Results.u;
+                    th.v = p.Results.v;
+                    th.h = p.Results.h;
+                    th.s = p.Results.s;
 
                     % Ensure sufficient parameters are provided to define state
-                    provided = ~isnan([th.T, th.P, th.x, th.u]);
+                    provided = ~isnan([th.T, th.P, th.x, th.u, th.v, th.h, th.s]);
                     paramsProvided = sum(provided);
                     if paramsProvided < 2
-                        error('Insufficient inputs: Please provide at least two variables among T, P, x, u.');
+                        error('Insufficient inputs: Please provide at least two variables among T, P, x, u, v, h, s.');
                     end
-                    par = feval(['liquid_',species],'T',th.T,'P',th.P,'x',th.x,'u',th.u);
-
-                    % % Load temperature, or pressure, dependent properties
-                    % if provided(1) && provided(2) % T and P provided
-                    %     par = feval(['liquid_',species],'T',th.T,'P',th.P);
-                    % elseif provided(1) && provided(3) % T and x provided
-                    %     par = feval(['liquid_',species],'T',th.T,'x',th.x);
-                    % elseif provided(1) && provided(4) % T and u provided
-                    %     par = feval(['liquid_',species],'T',th.T,'u',th.u);
-                    % elseif provided(2) && provided(3) % P and x provided
-                    %     par = feval(['liquid_',species],'P',th.P,'x',th.x);
-                    % elseif provided(2) && provided(4) % P and u provided
-                    %     par = feval(['liquid_',species],'P',th.P,'P',th.u);
-                    % end
+                    par = feval(['liquid_',species],'T',th.T,'P',th.P,'x',th.x,'u',th.u,'v',th.v,'h',th.h,'s',th.s);
 
                     th.T     = par.T;        % Temperature (K)
                     th.P     = par.P;        % Pressure (kPa)
                     th.v     = par.v;        % Specific volume (m3/kg)
-                    th.u     = par.u;        % Internal energy (kJ/kg)
-                    th.h     = par.h;        % Enthalpy (kJ/kg)
-                    th.s     = par.s;        % Entropy (kJ/kg*K)
+                    th.u     = par.u;        % Specific internal energy (kJ/kg)
+                    th.h     = par.h;        % Specific enthalpy (kJ/kg)
+                    th.s     = par.s;        % Specific entropy (kJ/kg*K)
                     th.T_sat = par.T_sat;    % Saturated temperature (K)
                     th.P_sat = par.P_sat;    % Saturated pressure (kPa)
                     th.v_f   = par.v_f;      % Saturated liquid specific volume (m3/kg)
                     th.v_g   = par.v_g;      % Saturated vapor specific volume (m3/kg)
-                    th.u_f   = par.u_f;      % Saturated liquid internal energy (kJ/kg)
-                    th.u_g   = par.u_g;      % Saturated vapor internal energy (kJ/kg)
-                    th.u_fg  = par.u_fg;     % Evaporation internal energy (kJ/kg)
-                    th.h_f   = par.h_f;      % Saturated liquid enthalpy (kJ/kg)
-                    th.h_g   = par.h_g;      % Saturated vapor enthalpy (kJ/kg)
-                    th.h_fg  = par.h_fg;     % Evaporation enthalpy (kJ/kg)
-                    th.s_f   = par.s_f;      % Saturated liquid entropy (kJ/kg*K)
-                    th.s_g   = par.s_g;      % Saturated vapor entropy (kJ/kg*K)
-                    th.s_fg  = par.s_fg;     % Evaporation entropy (kJ/kg*K)
-                    th.u_i   = par.u_i;      % Saturated ice internal energy (kJ/kg)
-                    th.u_ig  = par.u_ig;     % Sublimation internal energy (kJ/kg)
-                    th.h_i   = par.h_i;      % Saturated ice enthalpy (kJ/kg)
-                    th.h_ig  = par.h_ig;     % Sublimation enthalpy (kJ/kg)
-                    th.s_i   = par.s_i;      % Saturated ice entropy (kJ/kg*K)
-                    th.s_ig  = par.s_ig;     % Sublimation entropy (kJ/kg*K)
+                    th.u_f   = par.u_f;      % Saturated liquid specific internal energy (kJ/kg)
+                    th.u_g   = par.u_g;      % Saturated vapor specific internal energy (kJ/kg)
+                    th.u_fg  = par.u_fg;     % Evaporation specific internal energy (kJ/kg)
+                    th.h_f   = par.h_f;      % Saturated liquid specific enthalpy (kJ/kg)
+                    th.h_g   = par.h_g;      % Saturated vapor specific enthalpy (kJ/kg)
+                    th.h_fg  = par.h_fg;     % Evaporation specific enthalpy (kJ/kg)
+                    th.s_f   = par.s_f;      % Saturated liquid specific entropy (kJ/kg*K)
+                    th.s_g   = par.s_g;      % Saturated vapor specific entropy (kJ/kg*K)
+                    th.s_fg  = par.s_fg;     % Evaporation specific entropy (kJ/kg*K)
+                    th.u_i   = par.u_i;      % Saturated ice specific internal energy (kJ/kg)
+                    th.u_ig  = par.u_ig;     % Sublimation specific internal energy (kJ/kg)
+                    th.h_i   = par.h_i;      % Saturated ice specific enthalpy (kJ/kg)
+                    th.h_ig  = par.h_ig;     % Sublimation specific enthalpy (kJ/kg)
+                    th.s_i   = par.s_i;      % Saturated ice specific entropy (kJ/kg*K)
+                    th.s_ig  = par.s_ig;     % Sublimation specific entropy (kJ/kg*K)
                     th.x     = par.x;        % Quality
                     th.state = par.state;
 
@@ -209,7 +211,8 @@ classdef    thermo < handle
     end
     methods(Static)
         function properties
-            % PROPERTIES: Displays a list of all propetries of the thermo class
+            % PROPERTIES: Displays a list of all propetries of the thermo
+            % class, with symbol, name and unit
             names = {
                 'species'
                 'model'
@@ -278,32 +281,32 @@ classdef    thermo < handle
                 'Temperature (K)'
                 'Pressure (kPa)'
                 'Specific volume (m3/kg)'
-                'Internal energy (kJ/kg)'
-                'Enthalpy (kJ/kg)'
-                'Entropy (kJ/kg*K)'
-                'Specific heat capacity at constant volume (kJ/kg*K)'
-                'Specific heat capacity at constant pressure (kJ/kg*K)'
+                'Specific internal energy (kJ/kg)'
+                'Specific enthalpy (kJ/kg)'
+                'Specific entropy (kJ/kg*K)'
+                'Specific isochoric heat capacity (kJ/kg*K)'
+                'Specific isobaric heat capacity (kJ/kg*K)'
                 'Adiabatic index'
-                'Entropy function zero (kJ/kg*K)'
+                'Specific entropy function zero (kJ/kg*K)'
                 'Saturated temperature (K)'
                 'Saturated pressure (kPa)'
                 'Saturated liquid specific volume (m3/kg)'
                 'Saturated vapor specific volume (m3/kg)'
-                'Saturated liquid internal energy (kJ/kg)'
-                'Saturated vapor internal energy (kJ/kg)'
-                'Evaporation internal energy (kJ/kg)'
-                'Saturated ice internal energy (kJ/kg)'
-                'Sublimation internal energy (kJ/kg)'
-                'Saturated liquid enthalpy (kJ/kg)'
-                'Saturated vapor enthalpy (kJ/kg)'
-                'Evaporation enthalpy (kJ/kg)'
-                'Saturated ice enthalpy (kJ/kg)'
-                'Sublimation enthalpy (kJ/kg)'
-                'Saturated liquid entropy (kJ/kg*K)'
-                'Saturated vapor entropy (kJ/kg*K)'
-                'Evaporation entropy (kJ/kg*K)'
-                'Saturated ice entropy (kJ/kg*K)'
-                'Sublimation entropy (kJ/kg*K)'
+                'Saturated liquid specific internal energy (kJ/kg)'
+                'Saturated vapor specific internal energy (kJ/kg)'
+                'Evaporation specific internal energy (kJ/kg)'
+                'Saturated ice specific internal energy (kJ/kg)'
+                'Sublimation specific internal energy (kJ/kg)'
+                'Saturated liquid specific enthalpy (kJ/kg)'
+                'Saturated vapor specific enthalpy (kJ/kg)'
+                'Evaporation specific enthalpy (kJ/kg)'
+                'Saturated ice specific enthalpy (kJ/kg)'
+                'Sublimation specific enthalpy (kJ/kg)'
+                'Saturated liquid specific entropy (kJ/kg*K)'
+                'Saturated vapor specific entropy (kJ/kg*K)'
+                'Evaporation specific entropy (kJ/kg*K)'
+                'Saturated ice specific entropy (kJ/kg*K)'
+                'Sublimation specific entropy (kJ/kg*K)'
                 'Quality, fraction of vapor in a saturated mixture'
                 'State of liquid-vapor mixture'
                 };

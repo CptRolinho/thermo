@@ -1,7 +1,7 @@
 function par = ideal_gas(species, T)
     % Parameters for thermodynamic model for a pseudo species as an ideal gas
-    % Usage: par = ideal_gas('Air', 300);
     % Reference: Çengel
+    % v.0.2.0
 
     % The data file which contains all species data
     fileName = 'thermo.mat';
